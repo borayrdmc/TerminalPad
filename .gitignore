@@ -1,0 +1,15 @@
+# Build outputs
+TerminalPad
+*.exe
+*.o
+*.out
+build/
+
+# IDE
+.vscode/
+
+# Temp & OS files
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
