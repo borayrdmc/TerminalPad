@@ -166,11 +166,27 @@ int main(void){
                 addNewLine();
                 break;
 
-            case KEY_TAB:
+            case KEY_TAB: {
                 clearSearchOnEdit(&navigate_mode);
                 if(selection_active) deleteSelection();
+
+                int start_row=0;
+                int start_col=0;
+                getNodePosition(currentline,cursor,&start_row,&start_col);
+
+                undo_enabled=0;
                 for(int i=0;i<4;i++) letterEntry(" ");
+                undo_enabled=1;
+
+                int end_row=0;
+                int end_col=0;
+                getNodePosition(currentline,cursor,&end_row,&end_col);
+
+                char undo_payload[128];
+                snprintf(undo_payload,sizeof(undo_payload),"PASTE:%d:%d:%d:%d",start_row,start_col,end_row,end_col);
+                undo_push(undo,OP_REPLACE,0,0,undo_payload);
                 break;
+            }
 
             case KEY_BACKSPACE:
                 clearSearchOnEdit(&navigate_mode);

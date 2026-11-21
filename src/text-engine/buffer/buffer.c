@@ -143,18 +143,47 @@ void deleteBlock(){
         return;
     }
 
-    //If space then delete spaces until a word comes up
-    if(isspace((unsigned char)cursor->letter[0])){
-        while(cursor!=currentline->dummynode && isspace((unsigned char)cursor->letter[0])){
-            deleteLetter();
+    int delete_spaces=isspace((unsigned char)cursor->letter[0]);
+
+    //Find boundary node just before the block being deleted
+    node_x *boundary=cursor;
+    int total_bytes=0;
+    while(boundary!=currentline->dummynode){
+        int is_sp=isspace((unsigned char)boundary->letter[0]);
+        if(is_sp!=delete_spaces) break;
+        total_bytes+=(int)strlen(boundary->letter);
+        boundary=boundary->prev;
+    }
+
+    //Record entire deleted block as one OP_REPLACE undo entry ("row:col:text")
+    if(undo && undo_enabled && total_bytes>0){
+        int start_row=0;
+        int start_col=0;
+        getNodePosition(currentline,boundary,&start_row,&start_col);
+
+        char *undo_payload=malloc(32 + total_bytes + 1);
+        if(undo_payload!=NULL){
+            int pos=snprintf(undo_payload,32,"%d:%d:",start_row,start_col);
+            node_x *temp=boundary->next;
+            while(temp!=NULL){
+                int len=(int)strlen(temp->letter);
+                memcpy(undo_payload + pos,temp->letter,len);
+                pos+=len;
+                if(temp==cursor) break;
+                temp=temp->next;
+            }
+            undo_payload[pos]='\0';
+            undo_push(undo,OP_REPLACE,0,0,undo_payload);
+            free(undo_payload);
         }
     }
-    //Delete letters until a space comes up
-    else{
-        while(cursor!=currentline->dummynode && !isspace((unsigned char)cursor->letter[0])){
-            deleteLetter();
-        }
+
+    int prev_undo_enabled=undo_enabled;
+    undo_enabled=0;
+    while(cursor!=boundary){
+        deleteLetter();
     }
+    undo_enabled=prev_undo_enabled;
 }
 
 //Util functions

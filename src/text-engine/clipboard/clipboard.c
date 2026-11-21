@@ -159,31 +159,32 @@ static void insertUtf8Text(const char *text,int text_len){
     }
 }
 
-static void selectionToClipboard(line_x *start_line,node_x *start_node,line_x *end_line,node_x *end_node){
-    clipboard_len=0;
+static int extractSelectionText(line_x *start_line,node_x *start_node,line_x *end_line,node_x *end_node,char *out_buf,int max_len){
+    int out_len=0;
     line_x *current_line=start_line;
 
-    while(current_line!=NULL && clipboard_len<CLIPBOARD_MAX - 1){
+    while(current_line!=NULL && out_len<max_len - 1){
         node_x *first_node=(current_line==start_line) ? start_node->next : current_line->dummynode->next;
         node_x *stop_node=(current_line==end_line) ? end_node->next : NULL;
 
         for(node_x *temp_node=first_node;temp_node!=stop_node;temp_node=temp_node->next){
             int char_len=(int)strlen(temp_node->letter);
-            if(clipboard_len + char_len>=CLIPBOARD_MAX - 1) break;
+            if(out_len + char_len>=max_len - 1) break;
 
-            memcpy(clipboard_buf + clipboard_len,temp_node->letter,char_len);
-            clipboard_len+=char_len;
+            memcpy(out_buf + out_len,temp_node->letter,char_len);
+            out_len+=char_len;
         }
 
-        if(current_line!=end_line && clipboard_len<CLIPBOARD_MAX - 1){
-            clipboard_buf[clipboard_len++]='\n';
+        if(current_line!=end_line && out_len<max_len - 1){
+            out_buf[out_len++]='\n';
         }
         if(current_line==end_line) break;
 
         current_line=current_line->nextline;
     }
 
-    clipboard_buf[clipboard_len]='\0';
+    out_buf[out_len]='\0';
+    return out_len;
 }
 
 //Selection & clipboard operations
@@ -195,6 +196,28 @@ void deleteSelection(){
     line_x *end_line=selection_end.line;
     node_x *end_node=selection_end.node;
     normalizeSelection(&start_line,&start_node,&end_line,&end_node);
+
+    if(start_line==end_line && start_node==end_node){
+        selection_clear();
+        return;
+    }
+
+    //Record deleted selection as a single OP_REPLACE undo entry ("row:col:text")
+    if(undo && undo_enabled){
+        static char deleted_buf[CLIPBOARD_MAX];
+        int deleted_len=extractSelectionText(start_line,start_node,end_line,end_node,deleted_buf,CLIPBOARD_MAX);
+        int start_row=0;
+        int start_col=0;
+        getNodePosition(start_line,start_node,&start_row,&start_col);
+
+        char *undo_payload=malloc(32 + deleted_len + 1);
+        if(undo_payload!=NULL){
+            int prefix_len=snprintf(undo_payload,32,"%d:%d:",start_row,start_col);
+            memcpy(undo_payload + prefix_len,deleted_buf,deleted_len + 1);
+            undo_push(undo,OP_REPLACE,0,0,undo_payload);
+            free(undo_payload);
+        }
+    }
 
     currentline=start_line;
     cursor=start_node;
@@ -255,43 +278,14 @@ void copySelection(){
     node_x *end_node=selection_end.node;
     normalizeSelection(&start_line,&start_node,&end_line,&end_node);
 
-    selectionToClipboard(start_line,start_node,end_line,end_node);
+    clipboard_len=extractSelectionText(start_line,start_node,end_line,end_node,clipboard_buf,CLIPBOARD_MAX);
     systemClipboardSet(clipboard_buf,clipboard_len);
 }
 
 void cutSelection(){
     if(!selection_active) return;
-
-    line_x *start_line=selection_start.line;
-    node_x *start_node=selection_start.node;
-    line_x *end_line=selection_end.line;
-    node_x *end_node=selection_end.node;
-    normalizeSelection(&start_line,&start_node,&end_line,&end_node);
-
-    int start_row,start_col;
-    getNodePosition(start_line,start_node,&start_row,&start_col);
-
-    selectionToClipboard(start_line,start_node,end_line,end_node);
-    systemClipboardSet(clipboard_buf,clipboard_len);
-
-    //Encode cut payload as "row:col:text" for undo
-    int text_len=clipboard_len;
-    char *undo_payload=malloc(32 + text_len + 1);
-    int prefix_len=snprintf(undo_payload,32,"%d:%d:",start_row,start_col);
-    memcpy(undo_payload + prefix_len,clipboard_buf,text_len + 1);
-
-    selection_start.line=start_line;
-    selection_start.node=start_node;
-    selection_end.line=end_line;
-    selection_end.node=end_node;
-    selection_active=1;
-
-    undo_enabled=0;
+    copySelection();
     deleteSelection();
-    undo_enabled=1;
-
-    undo_push(undo,OP_REPLACE,0,0,undo_payload);
-    free(undo_payload);
 }
 
 void pasteClipboard(){
