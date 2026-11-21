@@ -6,6 +6,14 @@ TerminalPad implements its own 2D doubly linked list text engine, native UTF-8 c
 
 ---
 
+## Demo
+
+![TerminalPad Demo](public/TerminalPad.webp)
+
+*Showcasing native UTF-8 (Turkish) typing, multi-line selection, block deletion, atomic undo (`Ctrl+Z`), and built-in file saving/loading.*
+
+---
+
 ## Highlights
 
 - **Zero External Dependencies:** Built strictly on standard C11, the Win32 Console/Clipboard API (`windows.h`), and POSIX `termios`/`ioctl` on Linux.
@@ -196,6 +204,8 @@ A 2D doubly linked list was chosen for clean $O(1)$ edits, straightforward line 
 TerminalPad/
 ├── CMakeLists.txt
 ├── makefile
+├── public/
+│   └── TerminalPad.webp              # Demo animation
 └── src/
     ├── main.c                        # Entry point, event loop & shortcut dispatch
     ├── file-manager/
